@@ -1,0 +1,41 @@
+{% extends "layouts/module_admin.html" %}
+{% from "macros/code_editor.html" import render_editor %}
+
+{% block title %} OpenHasp Device {% endblock %} 
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="OpenHasp">OpenHasp</a></li>
+<li class="breadcrumb-item">{{form.title.data}}</li>
+{% endblock %}
+
+{% block module %}
+
+{% if form.errors %}
+    <ul>
+    {% for field, errors in form.errors.items() %}
+        {% for error in errors %}
+            <li>{{field}}: {{ error }}</li>
+        {% endfor %}
+    {% endfor %}
+    </ul>
+{% endif %}
+<h2>{{form.title.data}}</h2>
+
+<form method="POST">
+    {{ form.hidden_tag() }}
+    <div>
+        {{ form.title.label(class="form-label") }}
+        {{ form.title(class="form-control") }}
+    </div>
+    <div>
+        {{ form.mqtt_path.label(class="form-label") }}
+        {{ form.mqtt_path(class="form-control") }}
+    </div>
+    <div class="mb-3">
+        {{ form.panel_config.label(class="form-label") }}
+        {{ render_editor(form.panel_config, 'json')}}
+    </div>
+    <button type="submit" name="form_submit" class="btn btn-primary">Submit</button>
+    <a href="OpenHasp" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}
