@@ -5,6 +5,7 @@ import json, re, os
 import paho.mqtt.client as mqtt
 from flask import redirect
 from sqlalchemy import or_
+from app.database import getSession
 from app.core.main.BasePlugin import BasePlugin
 from plugins.OpenHasp.models.Device import Device
 from plugins.OpenHasp.forms.SettingForms import SettingsForm
@@ -24,6 +25,8 @@ class OpenHasp(BasePlugin):
         self.category = "Devices"
         self.actions = ['cycle','search']
         self._client = None
+
+        self.session = getSession()
 
         from plugins.OpenHasp.api import create_api_ns
         api_ns = create_api_ns(self)

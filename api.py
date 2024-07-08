@@ -2,11 +2,16 @@ import json
 from http import HTTPStatus
 from flask_restx import Namespace, Resource
 from app.api.decorators import api_key_required, role_required
+from app.api.models import model_404, model_result
 from plugins.OpenHasp import OpenHasp
 from plugins.OpenHasp.models.Device import Device
 from app.database import row2dict
 
 _api_ns = Namespace(name="OpenHasp",description="OpenHasp namespace",validate=True)
+
+response_result = _api_ns.model('Result', model_result)
+response_404 = _api_ns.model('Error', model_404)
+
 _instance: OpenHasp = None
 
 def create_api_ns(instance: OpenHasp):
@@ -19,6 +24,8 @@ class OpenPage(Resource):
     @api_key_required
     @role_required('admin')
     @_api_ns.doc(security="apikey")
+    @_api_ns.response(200, "Result", response_result)
+    @_api_ns.response(404, 'Not Found', response_404)
     def get(self, device_id, page):
         '''
         Open page
@@ -28,14 +35,16 @@ class OpenPage(Resource):
             batch = {}
             batch["page"] = page
             _instance.send_batch(panel.mqtt_path, batch)
-            return "ok"
-        return "Not found"
+            return {"success" : True}, 200
+        return {"success": False,
+                "msg": "Panel not found."}, 404
 
 @_api_ns.route("/panels", endpoint="openhasp_panels")
 class GetPanels(Resource):
     @api_key_required
     @role_required('admin')
     @_api_ns.doc(security="apikey")
+    @_api_ns.response(200, "List panel", response_result)
     def get(self):
         '''
         Get panels
@@ -44,4 +53,5 @@ class GetPanels(Resource):
         result = [row2dict(panel) for panel in panels]
         for panel in result:
             panel["panel_config"] = json.loads(panel["panel_config"])
-        return result, HTTPStatus.OK
+        return {"success": True,
+                "result": result}, 200
