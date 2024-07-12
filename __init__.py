@@ -91,12 +91,13 @@ class OpenHasp(BasePlugin):
     
     def cyclic_task(self):
         if self.event.is_set():
-            # Останавливаем цикл обработки сообщений
-            self._client.loop_stop()
             # Отключаемся от брокера MQTT
             self._client.disconnect()
+            # Останавливаем цикл обработки сообщений
+            self._client.loop_stop()
+            self._client = None
         else:
-            time.sleep(1)
+            self.event.wait(1.0)
 
     def send_mqtt_command(self, topic, value, qos = 0, retain = False):
         self.logger.info("Publish: %s %s",topic,value)
