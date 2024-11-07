@@ -1,18 +1,17 @@
-import time
 from jinja2 import Environment
-import datetime
-import json, re, os
+import json
+import re
+import os
 import paho.mqtt.client as mqtt
 from flask import redirect
-from sqlalchemy import or_
-from app.database import getSession
+from sqlalchemy import or_, delete
+from app.database import session_scope
 from app.core.main.BasePlugin import BasePlugin
 from plugins.OpenHasp.models.Device import Device
 from plugins.OpenHasp.forms.SettingForms import SettingsForm
 from plugins.OpenHasp.forms.DeviceForm import routeDevice
-from app.core.lib.object import *
+from app.core.lib.object import getObject, getProperty, updateProperty, callMethodThread
 from app.core.lib.common import addNotify, CategoryNotify
-from app.authentication.handlers import handle_admin_required
 from app.api import api
 
 class OpenHasp(BasePlugin):
@@ -26,12 +25,9 @@ class OpenHasp(BasePlugin):
         self.actions = ['cycle','search']
         self._client = None
 
-        self.session = getSession()
-
         from plugins.OpenHasp.api import create_api_ns
         api_ns = create_api_ns(self)
         api.add_namespace(api_ns, path="/OpenHasp")
-        
 
     def initialization(self):
         # Создаем клиент MQTT
@@ -40,8 +36,10 @@ class OpenHasp(BasePlugin):
         self._client.on_connect = self.on_connect
         self._client.on_disconnect = self.on_disconnect
         self._client.on_message = self.on_message
-        
+
         if "host" in self.config:
+            if self.config.get("login",'') != '' and self.config.get("password",'') != '':
+                self._client.username_pw_set(self.config["login"], self.config["password"])
             # Подключаемся к брокеру MQTT
             self._client.connect(self.config.get("host",""), 1883, 0)
             # Запускаем цикл обработки сообщений в отдельном потоке
@@ -50,45 +48,51 @@ class OpenHasp(BasePlugin):
     def admin(self, request):
         op = request.args.get('op', '')
         id = request.args.get('device', '')
-            
+
         if op == 'delete':
-            #delete 
-            sql = delete(Device).where(Device.id == id)
-            self.session.execute(sql)
-            self.session.commit()
+            # delete
+            with session_scope() as session:
+                sql = delete(Device).where(Device.id == id)
+                session.execute(sql)
+                session.commit()
             return redirect(self.name)
 
         if op == 'add' or op == 'edit':
             return routeDevice(request)
-        
+
         if op == "reloadpage":
-            panel= self.session.query(Device).where(Device.id == id).one_or_none()
-            if panel:
-                self.reload_pages(panel)
+            with session_scope() as session:
+                panel = session.query(Device).where(Device.id == id).one_or_none()
+                if panel:
+                    self.reload_pages(panel)
             return redirect(self.name)
- 
+
         settings = SettingsForm()
         if request.method == 'GET':
             settings.host.data = self.config.get('host','')
             settings.port.data = self.config.get('port',1883)
             settings.topic.data = self.config.get('topic','')
+            settings.login.data = self.config.get('login','')
+            settings.password.data = self.config.get('password','')
         else:
             if settings.validate_on_submit():
                 self.config["host"] = settings.host.data
                 self.config["port"] = settings.port.data
                 self.config["topic"] = settings.topic.data
+                self.config["login"] = settings.login.data
+                self.config["password"] = settings.password.data
                 self.saveConfig()
                 return redirect(self.name)
 
-        devices = self.session.query(Device).all()
+        devices = Device.query.all()
 
         content = {
-                "form": settings,
-                "devices": devices,
+            "form": settings,
+            "devices": devices,
         }
-            
+
         return self.render("openhasp_devices.html", content)
-    
+
     def cyclic_task(self):
         if self.event.is_set():
             # Отключаемся от брокера MQTT
@@ -99,9 +103,9 @@ class OpenHasp(BasePlugin):
         else:
             self.event.wait(1.0)
 
-    def send_mqtt_command(self, topic, value, qos = 0, retain = False):
+    def send_mqtt_command(self, topic, value, qos=0, retain=False):
         self.logger.info("Publish: %s %s",topic,value)
-        self._client.publish(topic, str(value), qos=qos, retain= retain)
+        self._client.publish(topic, str(value), qos=qos, retain=retain)
 
     def send_command(self, root_path, command):
         topic = f"{root_path}/command"
@@ -117,18 +121,19 @@ class OpenHasp(BasePlugin):
             key = keys[0]
             self.send_value(root_path, key, batch[key])
             return
-        
+
         data = [f"{key} {batch[key]}" for key in keys]
-        command = "json "+json.dumps(data)
+        command = "json " + json.dumps(data)
         self.send_command(root_path, command)
 
     def changeLinkedProperty(self, obj, prop, value):
         self.logger.debug("PropertySetHandle: %s.%s=%s",obj,prop,value)
         op = f"%{obj}.{prop}%"
-        found = self.update_values(0, "", op, value)
-        if not found:
-            from app.core.lib.object import removeLinkFromObject
-            removeLinkFromObject(obj, prop, self.name)
+        with session_scope() as session:
+            found = self.update_values(session, 0, "", op, value)
+            if not found:
+                from app.core.lib.object import removeLinkFromObject
+                removeLinkFromObject(obj, prop, self.name)
 
     # Функция обратного вызова для подключения к брокеру MQTT
     def on_connect(self,client, userdata, flags, rc):
@@ -156,9 +161,9 @@ class OpenHasp(BasePlugin):
 
     # Функция обратного вызова для получения сообщений
     def on_message(self,client, userdata, msg):
-        #self.logger.info(msg.topic+" "+str(msg.payload))
+        # self.logger.info(msg.topic+" "+str(msg.payload))
         payload = msg.payload.decode('utf-8')
-        
+
         if re.search(r'command', msg.topic):
             return
 
@@ -168,54 +173,56 @@ class OpenHasp(BasePlugin):
         self.processMessage(msg.topic, payload)
 
     def processMessage(self, topic, msg):
-        
+
         self.logger.debug(f'Topic {topic} = {msg}')
 
-        if re.search(r'discovery', topic):
-            discovery = json.loads(msg)
-            if "node_t" not in discovery:
-                return
-            mqtt_path = discovery["node_t"][:-1]
-            device = self.session.query(Device).where(Device.mqtt_path == mqtt_path).one_or_none()
-            if not device:
-                device = Device(mqtt_path=mqtt_path, title = discovery["node"])
-                self.session.add(device)
-                self.session.commit()
-            return
-        
-        devices = self.session.query(Device).all()
-        for device in devices:
-            if device.mqtt_path in topic:
-                try:
-                    self.process_panel_message(device, topic, msg)
-                except Exception as e:
-                    self.logger.error(f'Error processing message: {e}')
+        with session_scope() as session:
+
+            if re.search(r'discovery', topic):
+                discovery = json.loads(msg)
+                if "node_t" not in discovery:
+                    return
+                mqtt_path = discovery["node_t"][:-1]
+                device = session.query(Device).where(Device.mqtt_path == mqtt_path).one_or_none()
+                if not device:
+                    device = Device(mqtt_path=mqtt_path, title=discovery["node"])
+                    session.add(device)
+                    session.commit()
                 return
 
-    def process_panel_message(self, panel: Device, topic, msg):
+            devices = session.query(Device).all()
+            for device in devices:
+                if device.mqtt_path in topic:
+                    try:
+                        self.process_panel_message(session, device, topic, msg)
+                    except Exception as e:
+                        self.logger.error(f'Error processing message: {e}')
+                    return
+
+    def process_panel_message(self, session, panel: Device, topic, msg):
         key = os.path.basename(topic)
-        
+
         self.logger.debug(f"Processing ({panel.title}) {topic} - {key}: {msg}")
-        
+
         if key == "page":
             panel.current_page = msg
-            self.session.commit()
+            session.commit()
             self.set_linked_property(panel, "page", msg)
             config = json.loads(panel.panel_config)
             if "page_linkedProperty" in config:
-                self.update_values(panel.id, "page", config["page_linkedProperty"], msg)
+                self.update_values(session, panel.id, "page", config["page_linkedProperty"], msg)
         elif key == "LWT":
-            online = True if msg=='online' else False
+            online = True if msg == 'online' else False
             if panel.online != online:
                 panel.online = online
-                self.session.commit()
+                session.commit()
                 self.set_linked_property(panel, "LWT", msg)
         elif key == "statusupdate":
             value = json.loads(msg)
             if value["uptime"] < 30:
                 self.reload_pages(panel)
             panel.ip = value["ip"]
-            self.session.commit()
+            session.commit()
             self.set_linked_property(panel, "ip", value["ip"])
         elif key == "idle":
             res = self.set_linked_property(panel, "idle", msg)
@@ -295,13 +302,13 @@ class OpenHasp(BasePlugin):
                     if event["event"] == default_event:
                         if "val" in event and "val" in obj:
                             self.set_value(obj["val"], event["val"])
-                            self.update_values(panel.id, f"{key}.val", obj["val"], event["val"])
+                            self.update_values(session, panel.id, f"{key}.val", obj["val"], event["val"])
                         if "text" in event and "text" in obj:
                             self.set_value(obj["text"], event["text"])
-                            self.update_values(panel.id, f"{key}.text", obj["val"], event["val"])
+                            self.update_values(session, panel.id, f"{key}.text", obj["val"], event["val"])
                         if "color" in event and "color" in obj:
                             self.set_value(obj["color"], event["color"])
-                            self.update_values(panel.id, f"{key}.color", obj["val"], event["val"])
+                            self.update_values(session, panel.id, f"{key}.color", obj["val"], event["val"])
 
     def clean_object(self, obj):
         events = ["up", "down", "release", "long", "hold", "changed"]
@@ -337,7 +344,7 @@ class OpenHasp(BasePlugin):
                 for key, val in obj.items():
                     if isinstance(val, str):
                         obj[key] = self.process_value(val, "", "")
-                
+
                 self.clean_object(obj)
                 jsonl = f'jsonl {json.dumps(obj)}'
                 self.send_command(panel.mqtt_path, jsonl)
@@ -351,19 +358,20 @@ class OpenHasp(BasePlugin):
 
     def reload_panels(self):
         self.logger.info("Reload panel's config")
-        panels = self.session.query(Device).all()
-        for panel in panels:
-            self.reload_pages(panel)
+        with session_scope() as session:
+            panels = session.query(Device).all()
+            for panel in panels:
+                self.reload_pages(panel)
 
     def add_template(self, panel: Device, parent):
         name = parent["template"]
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
             return
-        
+
         template = config['templates'][name]
         self.merge_objects(template[0], parent)
-        
+
         for index, obj in enumerate(template):
             if 'tag' not in obj:
                 tag = {
@@ -373,12 +381,12 @@ class OpenHasp(BasePlugin):
                     "parent": parent["id"]
                 }
                 obj['tag'] = tag
-            
+
             obj["id"] = int(parent["id"]) + int(obj["id"])
-            
+
             if index > 0 and "parentid" in obj:
                 obj["parentid"] = int(obj["parentid"]) + int(parent["id"])
-            
+
             for key, val in obj.items():
                 if not isinstance(val, str):
                     continue
@@ -393,15 +401,17 @@ class OpenHasp(BasePlugin):
                 else:
                     op = self.replace_object(parent["linkedObject"], val)
                     obj[key] = self.process_value(op, "", "")
-            
+
             self.clean_object(obj)
             jsonl = "jsonl " + json.dumps(obj)
             self.send_command(panel.mqtt_path, jsonl)
 
     def replace_object(self, obj, property_):
         pattern = r'%\.([^\%]*)%'
+
         def callback(matches):
             return f'%{obj}.{matches.group(1)}%'
+
         return re.sub(pattern, callback, str(property_))
 
     def merge_objects(self, child, parent):
@@ -414,7 +424,7 @@ class OpenHasp(BasePlugin):
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
             return
-        
+
         template = config['templates'][name]
         for obj in template:
             if 'tag' not in obj:
@@ -424,9 +434,9 @@ class OpenHasp(BasePlugin):
                     "id": obj['id']
                 }
                 obj['tag'] = tag
-            
+
             obj['page'] = panel.current_page
-            
+
             for key, val in obj.items():
                 if not isinstance(val, str):
                     continue
@@ -438,7 +448,7 @@ class OpenHasp(BasePlugin):
                 else:
                     op = self.replace_object(ob, val)
                     obj[key] = self.process_value(op, "", "")
-            
+
             self.clean_object(obj)
             jsonl = "jsonl " + json.dumps(obj)
             self.send_command(panel.mqtt_path, jsonl)
@@ -447,7 +457,7 @@ class OpenHasp(BasePlugin):
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
             return
-        
+
         template = config['templates'][name]
         for obj in template:
             cmd = f"p{panel.current_page}b{obj['id']}.delete"
@@ -471,7 +481,7 @@ class OpenHasp(BasePlugin):
             return self.set_value(linked_property, value)
         return False
 
-    def update_values(self, panel_id, name_value, op, value):
+    def update_values(self, session, panel_id, name_value, op, value):
         found = 0
         cache = self.check_from_cache(f"hasp:{op}")
         if cache:
@@ -492,7 +502,7 @@ class OpenHasp(BasePlugin):
                 return found
 
         cache = {}
-        panels = self.session.query(Device).all()
+        panels = session.query(Device).all()
         for panel in panels:
             batch = {}
             config = json.loads(panel.panel_config)
@@ -554,21 +564,21 @@ class OpenHasp(BasePlugin):
                 self.send_batch(panel.mqtt_path, batch)
 
         return found
-    
+
     def process_value(self, template, op, value):
         data = template
         if op:
             data = data.replace(op, str(value))
-        
+
         pattern = r'%([^%\'"]+)\.([^%\'"]+)%'
         matches = re.findall(pattern, template)
         for match in matches:
-            val = getProperty(match[0]+"."+match[1])
-            data = data.replace("%"+match[0]+"."+match[1]+"%", str(val))
-        
+            val = getProperty(match[0] + "." + match[1])
+            data = data.replace("%" + match[0] + "." + match[1] + "%", str(val))
+
         if '{{' in data:
             data = self.process_title(data)
-        
+
         return data
         match = re.search(r'{{\s*([^}]+)\s*}}', data)
         if match:
@@ -577,7 +587,7 @@ class OpenHasp(BasePlugin):
                 # Evaluate the code and get its result
                 with self._app.app_context():
                     from flask import render_template_string
-                    data = render_template_string(code) # eval(code)
+                    data = render_template_string(code)  # eval(code)
                 self.logger.debug("Process template: %s => %s Result: %s",template, code, data)
             except ZeroDivisionError:
                 self.logger.error("Error: Division by zero is not allowed (%s)",template)
@@ -588,9 +598,9 @@ class OpenHasp(BasePlugin):
             except Exception as e:
                 self.logger.exception("Error: %s (%s)", e,template)
                 data = 'error'
-        
+
         return data
-    
+
     def search(self, query: str) -> str:
         res = []
         devices = Device.query.filter(or_(Device.title.contains(query),Device.panel_config.contains(query))).all()
@@ -600,15 +610,15 @@ class OpenHasp(BasePlugin):
 
     def check_from_cache(self, name):
         from app.extensions import cache
-        return cache.get(name)     
-                
+        return cache.get(name)
+
     def save_to_cache(self, name, value):
         from app.extensions import cache
-        return cache.set(name, value) 
+        return cache.set(name, value)
 
     def str_contains(self, haystack, needle):
         return needle != '' and needle in haystack
-    
+
     def process_title(self, template_string):
         try:
             env = Environment()
@@ -617,7 +627,7 @@ class OpenHasp(BasePlugin):
             }
             output = template.render(data)
             self.logger.debug("Parse template: %s Result: %s", template_string, output)
-            return output            
+            return output
         except Exception as e:
             self.logger.exception("Error: %s (%s)", e,template_string)
             return template_string
