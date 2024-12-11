@@ -104,7 +104,7 @@ class OpenHasp(BasePlugin):
             self.event.wait(1.0)
 
     def send_mqtt_command(self, topic, value, qos=0, retain=False):
-        self.logger.info("Publish: %s %s",topic,value)
+        self.logger.info("Publish: %s = %s",topic,value)
         self._client.publish(topic, str(value), qos=qos, retain=retain)
 
     def send_command(self, root_path, command):
@@ -161,7 +161,7 @@ class OpenHasp(BasePlugin):
 
     # Функция обратного вызова для получения сообщений
     def on_message(self,client, userdata, msg):
-        # self.logger.info(msg.topic+" "+str(msg.payload))
+        self.logger.debug(msg.topic + " " + str(msg.payload))
         payload = msg.payload.decode('utf-8')
 
         if re.search(r'command', msg.topic):
@@ -174,7 +174,7 @@ class OpenHasp(BasePlugin):
 
     def processMessage(self, topic, msg):
 
-        self.logger.debug(f'Topic {topic} = {msg}')
+        self.logger.info("Receive: %s = %s",topic,msg)
 
         with session_scope() as session:
 
@@ -247,11 +247,13 @@ class OpenHasp(BasePlugin):
             match = re.match(r'^p(\d+)b(\d+)$', key)
             if match:
                 page_index, object_id = match.groups()
+                page_index = int(page_index)
+                object_id = int(object_id)
                 event = json.loads(msg)
                 config = json.loads(panel.panel_config)
-                if int(page_index) > len(config["pages"]) - 1:
+                if page_index > len(config["pages"]) - 1:
                     return
-                page = config["pages"][int(page_index)]
+                page = config["pages"][page_index]
                 obj = None
                 if "tag" in event:
                     for template_obj in config['templates'][event['tag']['template']]:
@@ -283,7 +285,7 @@ class OpenHasp(BasePlugin):
                 self.logger.debug(json.dumps(obj))
 
                 if obj:
-                    event.update({"object": key, "page": int(page_index), "id": obj["id"]})
+                    event.update({"object": key, "page": page_index, "id": obj["id"]})
                     if event['event'] + "_linkedTemplate" in obj and 'linkedObject' in obj:
                         self.open_template(panel, obj[event['event'] + "_linkedTemplate"], obj["linkedObject"])
                         return
@@ -296,6 +298,9 @@ class OpenHasp(BasePlugin):
                     if event['event'] + "_linkedMethod" in obj:
                         callMethodThread(obj[event['event'] + "_linkedMethod"], {'event': event})
                         return
+                    for item in obj.keys():
+                        if "_linkedMethod" in item:  # skip other methods
+                            return
                     default_event = config.get("value_event", "up")
                     if obj["obj"] in ['dropdown', 'roller']:
                         default_event = "changed"
