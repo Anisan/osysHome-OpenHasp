@@ -25,6 +25,8 @@ def set_linked(config):
            cache.delete(k)
 
 def find_linked(config, add):
+    if config == '':
+        return
     pattern = r'%([^%\'"]+)\.([^%\'"]+)%'
     matches = re.findall(pattern, config)
 
@@ -36,6 +38,8 @@ def find_linked(config, add):
 
         # link for templates
     config = json.loads(config)
+    if 'pages' not in config:
+        return
     for page in config['pages']:
         for obj in page['objects']:
             if obj["obj"] == 'template' and "linkedObject" in obj:

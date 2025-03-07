@@ -1,7 +1,8 @@
 import json
 from http import HTTPStatus
 from flask_restx import Namespace, Resource
-from app.api.decorators import api_key_required, role_required
+from app.api.decorators import api_key_required
+from app.authentication.handlers import handle_admin_required
 from app.api.models import model_404, model_result
 from plugins.OpenHasp import OpenHasp
 from plugins.OpenHasp.models.Device import Device
@@ -22,7 +23,7 @@ def create_api_ns(instance: OpenHasp):
 @_api_ns.route("/page/<device_id>/<page>", endpoint="openhasp_page")
 class OpenPage(Resource):
     @api_key_required
-    @role_required('admin')
+    @handle_admin_required
     @_api_ns.doc(security="apikey")
     @_api_ns.response(200, "Result", response_result)
     @_api_ns.response(404, 'Not Found', response_404)
@@ -42,7 +43,7 @@ class OpenPage(Resource):
 @_api_ns.route("/panels", endpoint="openhasp_panels")
 class GetPanels(Resource):
     @api_key_required
-    @role_required('admin')
+    @handle_admin_required
     @_api_ns.doc(security="apikey")
     @_api_ns.response(200, "List panel", response_result)
     def get(self):
