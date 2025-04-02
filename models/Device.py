@@ -1,7 +1,7 @@
 
 from app.database import Column, Model, SurrogatePK, db
 
-class Device(SurrogatePK, db.Model):
+class HaspDevice(SurrogatePK, db.Model):
     __tablename__ = 'openehasp_device'
     title = Column(db.String(100))
     mqtt_path = Column(db.String(255))

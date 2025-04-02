@@ -5,7 +5,7 @@ from app.api.decorators import api_key_required
 from app.authentication.handlers import handle_admin_required
 from app.api.models import model_404, model_result
 from plugins.OpenHasp import OpenHasp
-from plugins.OpenHasp.models.Device import Device
+from plugins.OpenHasp.models.Device import HaspDevice
 from app.database import row2dict
 
 _api_ns = Namespace(name="OpenHasp",description="OpenHasp namespace",validate=True)
@@ -31,7 +31,7 @@ class OpenPage(Resource):
         '''
         Open page
         '''
-        panel = _instance.session.query(Device).where(Device.id == device_id).one_or_none()
+        panel = _instance.session.query(HaspDevice).where(HaspDevice.id == device_id).one_or_none()
         if (panel):
             batch = {}
             batch["page"] = page
@@ -50,7 +50,7 @@ class GetPanels(Resource):
         '''
         Get panels
         '''
-        panels = _instance.session.query(Device).all()
+        panels = _instance.session.query(HaspDevice).all()
         result = [row2dict(panel) for panel in panels]
         for panel in result:
             panel["panel_config"] = json.loads(panel["panel_config"])

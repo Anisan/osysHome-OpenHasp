@@ -6,7 +6,7 @@ from wtforms.validators import DataRequired
 
 from app.database import db
 from app.extensions import cache
-from plugins.OpenHasp.models.Device import Device
+from plugins.OpenHasp.models.Device import HaspDevice
 from app.core.lib.object import setLinkToObject, removeLinkFromObject
 
 class DeviceForm(FlaskForm):
@@ -56,7 +56,7 @@ def routeDevice(request):
     id = request.args.get('device', None)
     op = request.args.get('op', '')
     if id:
-        item = Device.query.get_or_404(id)  # Получаем объект из базы данных или возвращаем 404, если не найден
+        item = HaspDevice.query.get_or_404(id)  # Получаем объект из базы данных или возвращаем 404, если не найден
         form = DeviceForm(obj=item)  # Передаем объект в форму для редактирования
     else:
         form = DeviceForm()
@@ -67,7 +67,7 @@ def routeDevice(request):
                 unset_linked(item.panel_config)
                 form.populate_obj(item)  # Обновляем значения объекта данными из формы
             else:
-                item = Device()
+                item = HaspDevice()
                 form.populate_obj(item)
                 db.session.add(item)
             set_linked(item.panel_config)

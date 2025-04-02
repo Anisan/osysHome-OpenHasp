@@ -7,7 +7,7 @@ from flask import redirect
 from sqlalchemy import or_, delete
 from app.database import session_scope
 from app.core.main.BasePlugin import BasePlugin
-from plugins.OpenHasp.models.Device import Device
+from plugins.OpenHasp.models.Device import HaspDevice
 from plugins.OpenHasp.forms.SettingForms import SettingsForm
 from plugins.OpenHasp.forms.DeviceForm import routeDevice
 from app.core.lib.object import getObject, getProperty, updateProperty, callMethodThread
@@ -52,7 +52,7 @@ class OpenHasp(BasePlugin):
         if op == 'delete':
             # delete
             with session_scope() as session:
-                sql = delete(Device).where(Device.id == id)
+                sql = delete(HaspDevice).where(HaspDevice.id == id)
                 session.execute(sql)
                 session.commit()
             return redirect(self.name)
@@ -62,7 +62,7 @@ class OpenHasp(BasePlugin):
 
         if op == "reloadpage":
             with session_scope() as session:
-                panel = session.query(Device).where(Device.id == id).one_or_none()
+                panel = session.query(HaspDevice).where(HaspDevice.id == id).one_or_none()
                 if panel:
                     self.reload_pages(panel)
             return redirect(self.name)
@@ -84,7 +84,7 @@ class OpenHasp(BasePlugin):
                 self.saveConfig()
                 return redirect(self.name)
 
-        devices = Device.query.all()
+        devices = HaspDevice.query.all()
 
         content = {
             "form": settings,
@@ -183,14 +183,14 @@ class OpenHasp(BasePlugin):
                 if "node_t" not in discovery:
                     return
                 mqtt_path = discovery["node_t"][:-1]
-                device = session.query(Device).where(Device.mqtt_path == mqtt_path).one_or_none()
+                device = session.query(HaspDevice).where(HaspDevice.mqtt_path == mqtt_path).one_or_none()
                 if not device:
-                    device = Device(mqtt_path=mqtt_path, title=discovery["node"])
+                    device = HaspDevice(mqtt_path=mqtt_path, title=discovery["node"])
                     session.add(device)
                     session.commit()
                 return
 
-            devices = session.query(Device).all()
+            devices = session.query(HaspDevice).all()
             for device in devices:
                 if device.mqtt_path in topic:
                     try:
@@ -199,7 +199,7 @@ class OpenHasp(BasePlugin):
                         self.logger.error(f'Error processing message: {e}')
                     return
 
-    def process_panel_message(self, session, panel: Device, topic, msg):
+    def process_panel_message(self, session, panel: HaspDevice, topic, msg):
         key = os.path.basename(topic)
 
         self.logger.debug(f"Processing ({panel.title}) {topic} - {key}: {msg}")
@@ -324,7 +324,7 @@ class OpenHasp(BasePlugin):
             obj.pop(f"{event}_command", None)
         obj.pop("linkedObject", None)
 
-    def reload_page(self, panel: Device, index, clean=True):
+    def reload_page(self, panel: HaspDevice, index, clean=True):
         if clean:
             self.send_command(panel.mqtt_path, f"clearpage {index}")
 
@@ -356,7 +356,7 @@ class OpenHasp(BasePlugin):
             elif "template" in obj:
                 self.add_template(panel, obj)
 
-    def reload_pages(self, panel:Device, clean=True):
+    def reload_pages(self, panel:HaspDevice, clean=True):
         config = json.loads(panel.panel_config)
         for index in range(len(config["pages"])):
             self.reload_page(panel, index, clean)
@@ -364,11 +364,11 @@ class OpenHasp(BasePlugin):
     def reload_panels(self):
         self.logger.info("Reload panel's config")
         with session_scope() as session:
-            panels = session.query(Device).all()
+            panels = session.query(HaspDevice).all()
             for panel in panels:
                 self.reload_pages(panel)
 
-    def add_template(self, panel: Device, parent):
+    def add_template(self, panel: HaspDevice, parent):
         name = parent["template"]
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
@@ -425,7 +425,7 @@ class OpenHasp(BasePlugin):
             if key not in ignore:
                 child[key] = val
 
-    def open_template(self, panel: Device, name, ob):
+    def open_template(self, panel: HaspDevice, name, ob):
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
             return
@@ -458,7 +458,7 @@ class OpenHasp(BasePlugin):
             jsonl = "jsonl " + json.dumps(obj)
             self.send_command(panel.mqtt_path, jsonl)
 
-    def close_template(self, panel:Device, name):
+    def close_template(self, panel:HaspDevice, name):
         config = json.loads(panel.panel_config)
         if 'templates' not in config or name not in config['templates']:
             return
@@ -477,7 +477,7 @@ class OpenHasp(BasePlugin):
             return True
         return False
 
-    def set_linked_property(self, panel: Device, name, value):
+    def set_linked_property(self, panel: HaspDevice, name, value):
         if not panel.panel_config:
             return
         config = json.loads(panel.panel_config)
@@ -507,7 +507,7 @@ class OpenHasp(BasePlugin):
                 return found
 
         cache = {}
-        panels = session.query(Device).all()
+        panels = session.query(HaspDevice).all()
         for panel in panels:
             batch = {}
             config = json.loads(panel.panel_config)
@@ -608,7 +608,7 @@ class OpenHasp(BasePlugin):
 
     def search(self, query: str) -> str:
         res = []
-        devices = Device.query.filter(or_(Device.title.contains(query),Device.panel_config.contains(query))).all()
+        devices = HaspDevice.query.filter(or_(HaspDevice.title.contains(query),HaspDevice.panel_config.contains(query))).all()
         for device in devices:
             res.append({"url":f'OpenHasp?op=edit&device={device.id}', "title":f'{device.title}', "tags":[{"name":"OpenHasp","color":"primary"}]})
         return res
