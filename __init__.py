@@ -296,7 +296,7 @@ class OpenHasp(BasePlugin):
                         elif cmd == 'close':
                             self.close_template(panel, event['tag']['template'])
                     if event['event'] + "_linkedMethod" in obj:
-                        callMethodThread(obj[event['event'] + "_linkedMethod"], {'event': event})
+                        callMethodThread(obj[event['event'] + "_linkedMethod"], {'event': event}, source=self.name)
                         return
                     for item in obj.keys():
                         if "_linkedMethod" in item:  # skip other methods
