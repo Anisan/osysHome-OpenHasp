@@ -104,7 +104,7 @@ class OpenHasp(BasePlugin):
             self.event.wait(1.0)
 
     def send_mqtt_command(self, topic, value, qos=0, retain=False):
-        self.logger.info("Publish: %s = %s",topic,value)
+        self.logger.debug("Publish: %s = %s",topic,value)
         self._client.publish(topic, str(value), qos=qos, retain=retain)
 
     def send_command(self, root_path, command):
@@ -130,7 +130,7 @@ class OpenHasp(BasePlugin):
         self.logger.debug("PropertySetHandle: %s.%s=%s",obj,prop,value)
         op = f"%{obj}.{prop}%"
         with session_scope() as session:
-            found = self.update_values(session, 0, "", op, value)
+            found = self.update_values(session, 0, "", op, str(value)) 
             if not found:
                 from app.core.lib.object import removeLinkFromObject
                 removeLinkFromObject(obj, prop, self.name)
@@ -174,7 +174,7 @@ class OpenHasp(BasePlugin):
 
     def processMessage(self, topic, msg):
 
-        self.logger.info("Receive: %s = %s",topic,msg)
+        self.logger.debug("Receive: %s = %s",topic,msg)
 
         with session_scope() as session:
 
