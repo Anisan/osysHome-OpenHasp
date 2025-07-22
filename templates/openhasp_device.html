@@ -4,7 +4,7 @@
 {% block title %} OpenHasp Device {% endblock %} 
 
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="OpenHasp">OpenHasp</a></li>
+<li class="breadcrumb-item"><a href="OpenHasp">{{ _('OpenHasp')}}</a></li>
 <li class="breadcrumb-item">{{form.title.data}}</li>
 {% endblock %}
 
@@ -24,18 +24,18 @@
 <form method="POST">
     {{ form.hidden_tag() }}
     <div>
-        {{ form.title.label(class="form-label") }}
+        <label class="form-label">{{ _('Title') }}</label>
         {{ form.title(class="form-control") }}
     </div>
     <div>
-        {{ form.mqtt_path.label(class="form-label") }}
+        <label class="form-label">{{ _('Mqtt path') }}</label>
         {{ form.mqtt_path(class="form-control") }}
     </div>
     <div class="mb-3">
-        {{ form.panel_config.label(class="form-label") }}
+        <label class="form-label">{{ _('Config') }}</label>
         {{ render_editor(form.panel_config, 'json')}}
     </div>
-    <button type="submit" name="form_submit" class="btn btn-primary">Submit</button>
-    <a href="OpenHasp" class="btn btn-secondary">Cancel</a>
+    <button type="submit" name="form_submit" class="btn btn-primary">{{ _('Submit')}}</button>
+    <a href="OpenHasp" class="btn btn-secondary">{{ _('Cancel')}}</a>
 </form>
 {% endblock %}

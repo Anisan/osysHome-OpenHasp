@@ -1,18 +1,18 @@
 {% extends "layouts/module_admin.html" %}
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="OpenHasp">OpenHasp</a></li>
+<li class="breadcrumb-item"><a href="OpenHasp">{{ _('OpenHasp')}}</a></li>
 {% endblock %}
 {% block module %}
 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal">
     Settings
 </button>
-<a href="?op=add" class="btn btn-primary" title="Add">Add device</a>
+<a href="?op=add" class="btn btn-primary" title="Add">{{ _('Add')}}</a>
 <div class="table-responsive">
     <table class="table table-hover table-sm">
         <thead>
             <tr>
-                <th>Title</th>
-                <th>Path</th>
+                <th>{{ _('Title')}}</th>
+                <th>{{ _('Path')}}</th>
                 <th></th>
             </tr>
         </thead>
@@ -23,11 +23,11 @@
                 <td class="py-1">{{ device.mqtt_path }}</td>
                 <td  class="py-1" width="1%" nowrap>
                     <div>
-                        <a href="?op=reloadpage&device={{device.id}}" class="btn btn-warning" title="Reload pages"><i class="fas fa-sync-alt"></i></a>
-                        <button onclick="showScreenshot('{{ device.ip }}',{{ device.id }});" data-bs-toggle="modal" data-bs-target="#screenshot" class="btn btn-secondary" title="Screenshot"><i class="fas fa-camera"></i></button>
-                        <a href="http://{{ device.ip }}"  target="_blank" class="btn btn-primary" title="Device UI"><i class="fas fa-link"></i></a>
-                        <a href="?op=edit&device={{device.id}}" class="btn btn-secondary" title="Edit"><i class="feather icon-edit"></i></a>
-                        <a href="?op=delete&device={{device.id}}" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-danger" title="Delete"><i class="feather icon-trash"></i></a>
+                        <a href="?op=reloadpage&device={{device.id}}" class="btn btn-warning" title="{{ _('Reload pages')}}"><i class="fas fa-sync-alt"></i></a>
+                        <button onclick="showScreenshot('{{ device.ip }}',{{ device.id }});" data-bs-toggle="modal" data-bs-target="#screenshot" class="btn btn-secondary" title="{{ _('Screenshot')}}"><i class="fas fa-camera"></i></button>
+                        <a href="http://{{ device.ip }}"  target="_blank" class="btn btn-primary" title="{{ _('Device UI')}}"><i class="fas fa-link"></i></a>
+                        <a href="?op=edit&device={{device.id}}" class="btn btn-secondary" title="{{ _('Edit')}}"><i class="feather icon-edit"></i></a>
+                        <a href="?op=delete&device={{device.id}}" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-danger" title="{{ _('Delete')}}"><i class="feather icon-trash"></i></a>
                     </div>
                 </td>
             </tr>
@@ -42,36 +42,36 @@
             <div class="modal-content">
                 <form  method="POST">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Settings</h5>
+                    <h5 class="modal-title" id="exampleModalLabel">{{ _('Settings')}}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <!-- Поля формы -->
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        {{ form.host.label(class="form-label") }}
+                        <label class="form-label">{{ _('Host') }}</label>
                         {{ form.host(class="form-control") }}
                     </div>
                     <div class="mb-3">
-                        {{ form.port.label(class="form-label") }}
+                        <label class="form-label">{{ _('Port') }}</label>
                         {{ form.port(class="form-control") }}
                     </div>
                     <div class="mb-3">
-                        {{ form.login.label(class="form-label") }}
+                        <label class="form-label">{{ _('Username') }}</label>
                         {{ form.login(class="form-control") }}
                     </div>
                     <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
+                        <label class="form-label">{{ _('Password') }}</label>
                         {{ form.password(class="form-control") }}
                     </div>
                     <div class="mb-3">
-                        {{ form.topic.label(class="form-label") }}
+                        <label class="form-label">{{ _('Devices topics') }}</label>
                         {{ form.topic(class="form-control") }}
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-primary">Submit</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Close')}}</button>
+                    <button type="submit" class="btn btn-primary">{{ _('Submit')}}</button>
                 </div>
                 </form>
             </div>
@@ -108,8 +108,8 @@
         <div class="modal-dialog modal-lg" style="max-width:580px;">
             <div class="modal-content">
                 <div class="modal-header">
-                    <button class="close" data-bs-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-                    <h4 class="modal-title">Screenshot</h4>
+                    <button class="close" data-bs-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">{{ _('Close')}}</span></button>
+                    <h4 class="modal-title">{{ _('Screenshot')}}</h4>
                 </div>
                 <div class="modal-body" align="center">
                     <img id="image_screenshot" src="">
@@ -130,7 +130,7 @@
                 <button onclick="goPage(12);" class="btn btn-default" title="Page 12">12</button>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-default" data-bs-dismiss="modal">{{ _('Close')}}</button>
                 </div>
             </div>
         </div>
