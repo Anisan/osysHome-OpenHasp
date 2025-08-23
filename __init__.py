@@ -104,8 +104,9 @@ class OpenHasp(BasePlugin):
             self.event.wait(1.0)
 
     def send_mqtt_command(self, topic, value, qos=0, retain=False):
-        self.logger.info("Publish: %s = %s",topic,value)
-        self._client.publish(topic, str(value), qos=qos, retain=retain)
+        if self._client:
+            self.logger.info("Publish: %s = %s",topic,value)
+            self._client.publish(topic, str(value), qos=qos, retain=retain)
 
     def send_command(self, root_path, command):
         topic = f"{root_path}/command"
