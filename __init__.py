@@ -491,8 +491,6 @@ class OpenHasp(BasePlugin):
         found = 0
         cache = self.check_from_cache(f"hasp:{op}")
         if cache:
-            cache = json.loads(cache)
-
             for key, device in cache.items():
                 batch = device["batch"]
                 for obj, val in batch.items():
@@ -555,19 +553,20 @@ class OpenHasp(BasePlugin):
                                 name = f"p{pi}b{object_['id']}.{key}"
                                 data = val
                                 batch[name] = data
-
-            cache[panel.id] = {"MQTT": panel.mqtt_path, "batch": batch}
-            if found:
-                self.save_to_cache(f"hasp:{op}", json.dumps(cache))
-
+            
             if batch:
+                cache[panel.id] = {"MQTT": panel.mqtt_path, "batch": batch}
+                send_batch = {}
                 for key, val in batch.items():
                     data = self.process_value(val, op, value)
-                    batch[key] = data
+                    send_batch[key] = data
                 if panel.id == panel_id:
                     batch.pop(name_value, None)
 
-                self.send_batch(panel.mqtt_path, batch)
+                self.send_batch(panel.mqtt_path, send_batch)
+
+        if cache:
+            self.save_to_cache(f"hasp:{op}", cache)
 
         return found
 
@@ -584,26 +583,6 @@ class OpenHasp(BasePlugin):
 
         if '{{' in data:
             data = self.process_title(data)
-
-        return data
-        match = re.search(r'{{\s*([^}]+)\s*}}', data)
-        if match:
-            code = match.group(1)
-            try:
-                # Evaluate the code and get its result
-                with self._app.app_context():
-                    from flask import render_template_string
-                    data = render_template_string(code)  # eval(code)
-                self.logger.debug("Process template: %s => %s Result: %s",template, code, data)
-            except ZeroDivisionError:
-                self.logger.error("Error: Division by zero is not allowed (%s)",template)
-                data = 'error'
-            except SyntaxError:
-                self.logger.error("Error: Invalid Python code (%s)", template)
-                data = 'error'
-            except Exception as e:
-                self.logger.exception("Error: %s (%s)", e,template)
-                data = 'error'
 
         return data
 
