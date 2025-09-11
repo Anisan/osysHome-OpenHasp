@@ -511,8 +511,8 @@ class OpenHasp(BasePlugin):
             batch = {}
             config = json.loads(panel.panel_config)
             for key, val in config.items():
-                if panel_id != 0:
-                    break
+                #if panel_id != 0:
+                #    break
                 if val == op:
                     found = 1
                     pattern = r'([^_]+)_linkedProperty'
@@ -521,15 +521,15 @@ class OpenHasp(BasePlugin):
                         found = 1
                         name = match.group(1)
                         if name == 'backlight':
-                            batch["backlight"] = json.dumps({"state": value})
+                            batch["backlight"] = json.dumps({"state": op})
                         if name == 'brightness':
-                            batch["backlight"] = json.dumps({"brightness": value})
+                            batch["backlight"] = json.dumps({"brightness": op})
                         if name == 'page':
-                            batch["page"] = value
+                            batch["page"] = op
                         if name == 'idle':
-                            batch["idle"] = value
+                            batch["idle"] = op
                         if self.str_contains(name, "output"):
-                            state = json.dumps({"state": value})
+                            state = json.dumps({"state": op})
                             batch[name] = state
 
             for pi, page in enumerate(config["pages"]):
