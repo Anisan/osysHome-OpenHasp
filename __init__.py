@@ -41,7 +41,7 @@ class OpenHasp(BasePlugin):
             if self.config.get("login",'') != '' and self.config.get("password",'') != '':
                 self._client.username_pw_set(self.config["login"], self.config["password"])
             # Подключаемся к брокеру MQTT
-            self._client.connect(self.config.get("host",""), 1883, 0)
+            self._client.connect(self.config.get("host",""), int(self.config.get("port", 1883)), 0)
             # Запускаем цикл обработки сообщений в отдельном потоке
             self._client.loop_start()
 
