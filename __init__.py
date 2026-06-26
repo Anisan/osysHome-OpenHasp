@@ -12,6 +12,7 @@ from plugins.OpenHasp.forms.SettingForms import SettingsForm
 from plugins.OpenHasp.forms.DeviceForm import routeDevice
 from app.core.lib.object import getObject, getProperty, updateProperty, callMethodThread
 from app.core.lib.common import addNotify, CategoryNotify
+from app.core.utilities.mqtt_errors import describe_mqtt_disconnect
 from app.api import api
 
 class OpenHasp(BasePlugin):
@@ -29,21 +30,47 @@ class OpenHasp(BasePlugin):
         api_ns = create_api_ns(self)
         api.add_namespace(api_ns, path="/OpenHasp")
 
-    def initialization(self):
-        # Создаем клиент MQTT
-        self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
-        # Назначаем функции обратного вызова
+    def _get_mqtt_protocol(self):
+        """Возвращает константу версии протокола paho-mqtt из конфигурации."""
+        version = self.config.get("protocol", "3.1.1")
+        protocol_map = {
+            "3.1": mqtt.MQTTv31,
+            "3.1.1": mqtt.MQTTv311,
+            "5.0": mqtt.MQTTv5,
+        }
+        return protocol_map.get(version, mqtt.MQTTv311)
+
+    def _connect_mqtt(self):
+        if self._client is not None:
+            try:
+                self._client.loop_stop()
+                self._client.disconnect()
+            except Exception:
+                pass
+            self._client = None
+
+        host = (self.config.get("host") or "").strip()
+        if not host:
+            return
+
+        self._client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION1,
+            protocol=self._get_mqtt_protocol(),
+        )
         self._client.on_connect = self.on_connect
         self._client.on_disconnect = self.on_disconnect
         self._client.on_message = self.on_message
 
-        if "host" in self.config:
-            if self.config.get("login",'') != '' and self.config.get("password",'') != '':
-                self._client.username_pw_set(self.config["login"], self.config["password"])
-            # Подключаемся к брокеру MQTT
-            self._client.connect(self.config.get("host",""), int(self.config.get("port", 1883)), 0)
-            # Запускаем цикл обработки сообщений в отдельном потоке
-            self._client.loop_start()
+        login = (self.config.get("login") or "").strip()
+        password = (self.config.get("password") or "").strip()
+        if login and password:
+            self._client.username_pw_set(login, password)
+
+        self._client.connect(host, int(self.config.get("port", 1883)), 0)
+        self._client.loop_start()
+
+    def initialization(self):
+        self._connect_mqtt()
 
     def admin(self, request):
         op = request.args.get('op', '')
@@ -71,6 +98,7 @@ class OpenHasp(BasePlugin):
         if request.method == 'GET':
             settings.host.data = self.config.get('host','')
             settings.port.data = self.config.get('port',1883)
+            settings.protocol.data = self.config.get('protocol', '3.1.1')
             settings.topic.data = self.config.get('topic','')
             settings.login.data = self.config.get('login','')
             settings.password.data = self.config.get('password','')
@@ -78,10 +106,12 @@ class OpenHasp(BasePlugin):
             if settings.validate_on_submit():
                 self.config["host"] = settings.host.data
                 self.config["port"] = settings.port.data
+                self.config["protocol"] = settings.protocol.data
                 self.config["topic"] = settings.topic.data
                 self.config["login"] = settings.login.data
                 self.config["password"] = settings.password.data
                 self.saveConfig()
+                self._connect_mqtt()
                 return redirect(self.name)
 
         devices = HaspDevice.query.all()
@@ -146,19 +176,12 @@ class OpenHasp(BasePlugin):
                 self._client.subscribe(topic)
 
     def on_disconnect(self, client, userdata, rc):
-        addNotify("Disconnect MQTT",str(rc),CategoryNotify.Error,self.name)
+        msg = describe_mqtt_disconnect(rc)
         if rc == 0:
-            self.logger.info("Disconnected gracefully.")
-        elif rc == 1:
-            self.logger.info("Client requested disconnection.")
-        elif rc == 2:
-            self.logger.info("Broker disconnected the client unexpectedly.")
-        elif rc == 3:
-            self.logger.info("Client exceeded timeout for inactivity.")
-        elif rc == 4:
-            self.logger.info("Broker closed the connection.")
+            self.logger.info(msg)
         else:
-            self.logger.warning("Unexpected disconnection with code: %s", rc)
+            self.logger.warning(msg)
+            addNotify("Disconnect MQTT", msg, CategoryNotify.Error, self.name)
 
     # Функция обратного вызова для получения сообщений
     def on_message(self,client, userdata, msg):
